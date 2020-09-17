@@ -1,0 +1,129 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "GJaege"
+date: "16/09/2020"
+output: html_document
+---
+
+## Summary
+Here is my submission for the practical machine learning course project in which we are asked to construct several models, based on a given dataframe, to predict the way a 
+candidate has performed a barbell lift (5 classes are given).
+
+My report states : 
+1. the different steps i took to obtain, clean and prepare the data in order to work on the most relevant and concise dataframes.
+2. the different models I build and train as well as their accuracy. Here the random forest seem to be the most accurate with an accuracy of 99% that means a very low out-of-sample error.
+3. the predictions i obtained when using the random forest model on the validation dataframe
+
+
+## Loading usefull libraries
+
+```{r libraries}
+library(tidyverse);library(caret)
+```
+
+## Obtaining data
+
+```{r obtaining data, cache=TRUE}
+# Creating a directoryfile to DL the data
+dir.create("./data")
+
+# Downloading the training data
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "./data/training.csv")
+trainingData <- read.csv("./data/training.csv")
+
+# Downloading the validation data
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "./data/validating.csv")
+validate <- read.csv("./data/validating.csv")
+```
+
+## Preparing & Cleaning data
+
+```{r data prep}
+# Creating a training & a testing set based on training data
+inTrain <- createDataPartition(y=trainingData$classe,p=.7,list=FALSE)
+train <- trainingData[inTrain,]; test <- trainingData[-inTrain,]
+
+
+## Removing useless columns (username, timestamp, etc.)
+train <- train %>% select(-(1:7))
+test <- test %>% select(-(1:7))
+validate <- validate %>% select(-(1:7))
+
+
+## Removing variable with a Near Zero Variance [NZV]
+NZV <- nearZeroVar(train)
+train <- train %>% select(-all_of(NZV))
+test <- test %>% select(-all_of(NZV))
+validate <- validate %>% select(-all_of(NZV))
+
+
+## Removing columns that are more than 90% composed of NA's
+keepCols <- colMeans(is.na(train)) < 0.9
+
+train <- train[,keepCols]
+test <- test[,keepCols]
+validate <- validate[,keepCols]
+```
+
+After this cleaning process, we know end up with 3 dataframmes :
+1. train : 13737 observations & 53 variables
+2. test : 5885 observations & 53 variables
+3. validate : 20 observations & 53 variables
+
+
+## Training models
+
+We will strat by using 3 different models to see which one is the most accurate : a *decision tree*, a *random forest* and a *gradient boosting algorithm*.
+
+```{r pressure, cache=TRUE}
+## Setting seed
+set.seed(667)
+
+## Decision Tree
+DT <- train(classe~.,method="rpart",data=train)
+
+## Random Forest
+### Adjusting the training parameters in order to improve computationality (resampling method = cross-validation & allowing parallel computing)
+fitControl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+### Training model
+RF <- train(classe~.,data=train,method="rf",trControl=fitControl)
+
+## GBM
+GBM <- train(classe~.,data=train,method="gbm",trControl=fitControl,verbose=FALSE)
+```
+
+
+## Preditions & Accuracy Testing
+
+```{r pred, cache=TRUE}
+# Predict the values of "test" for the models trained on "train"
+## Decision Tree
+PredictDT <- predict(DT,test)
+## Random Forest
+PredictRF <- predict(RF,test)
+## GBM
+PredictGBM <- predict(GBM,test)
+
+# Testing accuracy with confusion matrix
+## Decision Tree
+AccuracyDT <- confusionMatrix(PredictDT,test$classe)$overall[[1]]
+## Random Forest
+AccuracyRF <- confusionMatrix(PredictRF,test$classe)$overall[[1]]
+## GBM
+AccuracyGBM <- confusionMatrix(PredictGBM,test$classe)$overall[[1]]
+
+# Comparing accuracy
+cbind(AccuracyDT,AccuracyRF,AccuracyGBM)
+```
+
+Those 3 algorithms, trained on the train dataframe are then tested on the test dataframe to measure their accuracy and their out of sample error.
+As we can see, the Random Forest Algorithm seem to be the most accurate, with an accuracy of 99%.
+
+## Predict "validate" values
+
+```{r predict validate, echo=FALSE}
+finalPred <- predict(RF,validate)
+print(finalPred)
+```
+
+Here are the predictions for the validate dataframe : 
